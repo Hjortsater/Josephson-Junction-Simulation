@@ -35,17 +35,32 @@ class JosephsonJunction:
 
         offsets = np.cumsum([0] + dims)
 
-        for p in range(self.nc):
-            for q in range(p + 1, self.nc):
+        # New code for for-loop to couple adjacent chain instead of bulk coupling
 
-                phaseDiff = self.chains[q].phase - self.chains[p].phase
-                t = self.tCouple * np.exp(1j * phaseDiff / 2)
+        for p in range(self.nc - 1):
+            q = p + 1          # only couple adjacent chains
 
-                i0, i1 = offsets[p], offsets[p + 1]
-                j0, j1 = offsets[q], offsets[q + 1]
+            phaseDiff = self.chains[q].phase - self.chains[p].phase
+            t = self.tCouple * np.exp(1j * phaseDiff / 2)
 
-                hj[i0:i1, j0:j1] += t * np.eye(i1 - i0)
-                hj[j0:j1, i0:i1] += np.conj(t) * np.eye(i1 - i0)
+            dim = dims[p]
+            N = dim // 2
+
+            p0 = offsets[p]
+
+            q0 = offsets[q]
+
+            i_e = p0 + (N - 1)     # last electron site in chain p
+            j_e = q0 + 0           # first electron site in chain q
+
+            hj[i_e, j_e] += t
+            hj[j_e, i_e] += np.conj(t)
+
+            i_h = p0 + (2*N - 1)   # last hole site in chain p
+            j_h = q0 + N           # first hole site in chain q
+
+            hj[i_h, j_h] += -np.conj(t)
+            hj[j_h, i_h] += -t
 
         return hj
 
@@ -80,52 +95,86 @@ class JosephsonJunction:
     def allCurrents(self):
         return np.array([self.current(i) for i in range(self.nc)])
 
+    # Plotting function for energy spectrum and current-phase relation
+    def andreev_spectrum(self, phiVals):
+        spectra = []
+
+        for phi in phiVals:
+            self.chains[1].phase = phi  # phase is set to phi for the second chain
+            self.chains[1].Delta = np.abs(self.chains[1].Delta) * np.exp(1j * phi)
+
+            h = self.buildHamiltonian()
+            eigvals = np.linalg.eigvalsh(h)
+
+            spectra.append(eigvals)
+
+        return np.array(spectra)
+
 
 if __name__ == "__main__":
-    
+        
     def runAndPlot(axE, axI, titlePrefix, chains, tC, color):
         jj = JosephsonJunction(chains=chains, tCouple=tC)
-        
-        baseDelta = chains[0].Delta
 
-        phiVals = np.linspace(0, 2 * np.pi, 100)
+        baseDelta = chains[0].Delta
+        phiVals = np.linspace(0, 2 * np.pi, 200)
+
+        # Calculate Andreev spectrum and energy
+        spec = jj.andreev_spectrum(phiVals)
         energies = []
-        
+
         for phi in phiVals:
             jj.chains[1].phase = phi
             jj.chains[1].Delta = baseDelta * np.exp(1j * phi)
-            
+
             if len(chains) == 3:
                 jj.chains[2].phase = 2 * phi
                 jj.chains[2].Delta = baseDelta * np.exp(1j * 2 * phi)
 
             energies.append(jj.energy())
-        
+
         energies = np.array(energies)
-        energiesNorm = energies - np.min(energies) 
+        energiesNorm = energies - np.min(energies)
         current = np.gradient(energies, phiVals)
 
         label = f"{titlePrefix}\n($t_c={tC}, N={chains[0].N}$)"
-        
-        axE.plot(phiVals, energiesNorm, label=label, lw=2.5, color=color)
+
+
+        Ecut = 0.6     # energy cutoff to filter out bulk states in the spectrum
+        n_keep = 4     # number of low-energy states to keep per φ
+
+        # Mask the spectrum to keep only states close to zero energy
+        masked_spec = []
+
+        for j in range(len(phiVals)):
+            energies_at_phi = spec[j, :]
+
+            # sort by absolute energy and keep only the lowest n_keep states
+            idx = np.argsort(np.abs(energies_at_phi))
+            selected = energies_at_phi[idx[:n_keep]]
+            masked_spec.append(np.sort(selected))
+        masked_spec = np.array(masked_spec)
+
+        for i in range(n_keep):
+            axE.plot(
+                phiVals,
+                masked_spec[:, i],
+                color='black',
+                lw=1.6 if i < 2 else 1.0,
+                alpha=0.9 if i < 2 else 0.6,
+                zorder=2
+            )
+
+        axE.plot(phiVals, energiesNorm, label=label, lw=2.5, color=color, zorder=3)
         axE.axvline(x=np.pi, color='gray', linestyle=':', alpha=0.4)
         axE.set_ylabel(r"$E - E_{min}$")
         axE.grid(True, linestyle=':', alpha=0.5)
-        
+
         axI.plot(phiVals, current, label=label, lw=2.5, color=color)
         axI.axvline(x=np.pi, color='gray', linestyle=':', alpha=0.4)
         axI.axhline(y=0, color='black', lw=1, alpha=0.7)
         axI.set_ylabel(r"Current $\propto \partial_\phi E$")
         axI.grid(True, linestyle=':', alpha=0.5)
-
-    fig = plt.figure(figsize=(16, 12))
-    
-    gs = gridspec.GridSpec(2, 2, figure=fig, hspace=0.35, wspace=0.25)
-    
-    ax2E = fig.add_subplot(gs[0, 0])
-    ax2I = fig.add_subplot(gs[0, 1])
-    ax3E = fig.add_subplot(gs[1, 0])
-    ax3I = fig.add_subplot(gs[1, 1])
     
     def formatPlotRow(axE, axI, superTitle):
         axE.set_title(superTitle + " (Energy)", fontsize=14)
@@ -142,6 +191,14 @@ if __name__ == "__main__":
 
     t = 1.0 
     delta = 0.5
+
+    fig = plt.figure(figsize=(16, 12))
+    gs = gridspec.GridSpec(2, 2, figure=fig, hspace=0.35, wspace=0.25)
+
+    ax2E = fig.add_subplot(gs[0, 0])
+    ax2I = fig.add_subplot(gs[0, 1])
+    ax3E = fig.add_subplot(gs[1, 0])
+    ax3I = fig.add_subplot(gs[1, 1])
     
     print("Calculating 2-Chain Systems...")
     
