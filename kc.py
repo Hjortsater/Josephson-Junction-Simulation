@@ -97,9 +97,49 @@ class KitaevChain:
         ks, energies = self.buildKSpaceHamiltonian()
         print(BdG)
         self.plotEnergyResults(ks, energies)
-
-
-if __name__ == "__main__":
     
-    kc = KitaevChain(Delta=1.0, phase=0)
-    kc.run()
+    def plotRealSpaceSpectrumVsMu(self, mu_values):
+
+        all_energies = []
+
+        mu_original = self.mu
+
+        for mu in mu_values:
+            self.mu = mu
+            BdG = self.buildBdGHamiltonian()
+            eigvals = np.linalg.eigvalsh(BdG)
+            all_energies.append(eigvals)
+
+        self.mu = mu_original
+
+        all_energies = np.array(all_energies)
+
+        topo_mask = np.abs(mu_values) < 2 * self.t
+
+        plt.figure(figsize=(8, 5))
+
+        plt.fill_between(
+            mu_values,
+            -np.max(np.abs(all_energies)),
+            np.max(np.abs(all_energies)),
+            where=topo_mask,
+            color='gray',
+            alpha=0.3
+        )
+
+        for i in range(all_energies.shape[1]):
+            plt.plot(mu_values, all_energies[:, i], color='black', linewidth=0.8)
+
+        plt.xlabel('Chemical potential μ')
+        plt.ylabel('Energy eigenvalues')
+        plt.title('Real-space BdG Spectrum vs μ')
+        plt.grid(True, linestyle=':', alpha=0.4)
+
+        plt.tight_layout()
+        plt.show()
+        
+if __name__ == "__main__":
+    kc = KitaevChain(N=50, t=1.0, Delta=2.0)
+    
+    mu_vals = np.linspace(-3, 3, 200)
+    kc.plotRealSpaceSpectrumVsMu(mu_vals)
