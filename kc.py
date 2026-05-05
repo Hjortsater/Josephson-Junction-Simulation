@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import make_interp_spline
+from mpl_toolkits.mplot3d import Axes3D
 
 """Code based off of code for Kitaev Chains, converted in to instantiable object classes"""
 
@@ -137,9 +138,59 @@ class KitaevChain:
 
         plt.tight_layout()
         plt.show()
+
         
+    def plotSpectrumVsMuAndN(self, mu_values, N_values):
+        mu_grid = []
+        N_grid = []
+        E_grid = []
+
+        mu_original = self.mu
+        N_original = self.N
+
+        for N in N_values:
+            self.N = N
+            for mu in mu_values:
+                self.mu = mu
+                BdG = self.buildBdGHamiltonian()
+                eigvals = np.linalg.eigvalsh(BdG)
+
+                for E in eigvals:
+                    mu_grid.append(mu)
+                    N_grid.append(N)
+                    E_grid.append(E)
+
+        self.mu = mu_original
+        self.N = N_original
+
+        mu_grid = np.array(mu_grid)
+        N_grid = np.array(N_grid)
+        E_grid = np.array(E_grid)
+
+        fig = plt.figure(figsize=(9, 6))
+        ax = fig.add_subplot(111, projection='3d')
+
+        sc = ax.scatter(mu_grid, N_grid, E_grid,
+                        c=E_grid, cmap='coolwarm',
+                        s=5, alpha=0.7)
+
+        ax.set_xlabel('μ')
+        ax.set_ylabel('Chain length N')
+        ax.set_zlabel('Energy')
+
+        ax.set_title('BdG Spectrum vs μ and N')
+
+        fig.colorbar(sc, ax=ax, shrink=0.6, label='Energy')
+
+        plt.tight_layout()
+        plt.show()
+
 if __name__ == "__main__":
-    kc = KitaevChain(N=50, t=1.0, Delta=2.0)
-    
-    mu_vals = np.linspace(-3, 3, 200)
-    kc.plotRealSpaceSpectrumVsMu(mu_vals)
+    kc = KitaevChain(t=1.0, Delta=2.0)
+
+    kc.run()
+
+    mu_vals = np.linspace(-3, 3, 150)
+    N_vals = np.arange(2, 11)
+
+    kc.plotSpectrumVsMuAndN(mu_vals, N_vals)

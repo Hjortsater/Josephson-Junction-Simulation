@@ -35,10 +35,9 @@ class JosephsonJunction:
 
         offsets = np.cumsum([0] + dims)
 
-        # New code for for-loop to couple adjacent chain instead of bulk coupling
 
         for p in range(self.nc - 1):
-            q = p + 1          # only couple adjacent chains
+            q = p + 1     
 
             phaseDiff = self.chains[q].phase - self.chains[p].phase
             t = self.tCouple * np.exp(1j * phaseDiff / 2)
@@ -50,14 +49,14 @@ class JosephsonJunction:
 
             q0 = offsets[q]
 
-            i_e = p0 + (N - 1)     # last electron site in chain p
-            j_e = q0 + 0           # first electron site in chain q
+            i_e = p0 + (N - 1)
+            j_e = q0 + 0      
 
             hj[i_e, j_e] += t
             hj[j_e, i_e] += np.conj(t)
 
-            i_h = p0 + (2*N - 1)   # last hole site in chain p
-            j_h = q0 + N           # first hole site in chain q
+            i_h = p0 + (2*N - 1)
+            j_h = q0 + N         
 
             hj[i_h, j_h] += -np.conj(t)
             hj[j_h, i_h] += -t
@@ -95,12 +94,11 @@ class JosephsonJunction:
     def allCurrents(self):
         return np.array([self.current(i) for i in range(self.nc)])
 
-    # Plotting function for energy spectrum and current-phase relation
     def andreev_spectrum(self, phiVals):
         spectra = []
 
         for phi in phiVals:
-            self.chains[1].phase = phi  # phase is set to phi for the second chain
+            self.chains[1].phase = phi
             self.chains[1].Delta = np.abs(self.chains[1].Delta) * np.exp(1j * phi)
 
             h = self.buildHamiltonian()
@@ -119,7 +117,6 @@ if __name__ == "__main__":
         baseDelta = chains[0].Delta
         phiVals = np.linspace(0, 2 * np.pi, 200)
 
-        # Calculate Andreev spectrum and energy
         spec = jj.andreev_spectrum(phiVals)
         energies = []
 
@@ -140,16 +137,14 @@ if __name__ == "__main__":
         label = f"{titlePrefix}\n($t_c={tC}, N={chains[0].N}$)"
 
 
-        Ecut = 0.6     # energy cutoff to filter out bulk states in the spectrum
-        n_keep = 4     # number of low-energy states to keep per φ
+        Ecut = 0.6
+        n_keep = 4
 
-        # Mask the spectrum to keep only states close to zero energy
         masked_spec = []
 
         for j in range(len(phiVals)):
             energies_at_phi = spec[j, :]
 
-            # sort by absolute energy and keep only the lowest n_keep states
             idx = np.argsort(np.abs(energies_at_phi))
             selected = energies_at_phi[idx[:n_keep]]
             masked_spec.append(np.sort(selected))
